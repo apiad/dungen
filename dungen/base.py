@@ -1,87 +1,113 @@
-# coding: utf8
+# coding: utf-8
 
 import yaml
 
 
-# Metaclass for registering the API classes so they can be deserialized automagically
-class Meta(type):
-    _registry = {}
+def dobj(cls):
+    def constructor(loader, node):
+        instance = cls.__new__(cls)
+        yield instance
+        state = loader.construct_mapping(node, deep=True)
+        instance.__init__(**state)
 
-    def __init__(cls, name, bases, nmspc):
-        super(Meta, cls).__init__(name, bases, nmspc)
-        Meta._registry[name] = cls
-
-    @staticmethod
-    def registry(name):
-        return Meta._registry[name]
+    yaml.add_constructor('!%s' % cls.__name__, constructor)
+    return cls
 
 
-class DungenObj(metaclass=Meta):
-    def __init__(self, id=None):
-        self.id = id
+class DungenObj:
+    def __init__(self, *args, **kwargs):
+        self._extra = kwargs
+
+    def __getattr__(self, key):
+        return self._extra[key]
 
 
+@dobj
 class State(DungenObj):
+    yaml_tag = '!State'
     def __init__(self, actions, **kwargs):
         super(State, self).__init__(**kwargs)
-        self.actions = actions
+        self._actions = actions
+
+    def actions(self):
+        return self._actions
 
 
 class Action(DungenObj):
     def __init__(self, label, **kwargs):
         super(Action, self).__init__(**kwargs)
-        self.label = label
+        self._label = label
+
+    def label(self):
+        return self._label
+
+    def execute(self, game):
+        raise NotImplementedError()
 
 
+@dobj
 class Message(Action):
+    yaml_tag = '!Message'
     def __init__(self, message, **kwargs):
         super(Message, self).__init__(**kwargs)
-        self.message = message
+        self._message = message
+
+    def execute(self, game):
+        return game.send_message(self._message)
 
 
+@dobj
 class Goto(Action):
+    yaml_tag = '!Goto'
     def __init__(self, to, **kwargs):
         super(Goto, self).__init__(**kwargs)
-        self.to = to
+        self._to = to
+
+    def execute(self, game):
+        return game.change_state(self._to)
 
 
+@dobj
 class Game(DungenObj):
-    def __init__(self, name, current, states, **kwargs):
-        super(DungenObj, self).__init__(**kwargs)
-        self.name = name
-        self.states = states
-        self._states_dict = {s.id: s for s in states}
-        self.current = self._states_dict[current]
+    yaml_tag = '!Game'
+    def __init__(self, name, start, states, **kwargs):
+        super(Game, self).__init__(**kwargs)
+        self._name = name
+        self._states = states
+        self._current = start
+        self._listeners = []
+
+    def add_listener(self, lst):
+        self._listeners.append(lst)
+
+    def current_state(self):
+        return self._states[self._current]
+
+    def change_state(self, state):
+        self._current = state
+
+    def send_message(self, msg):
+        for lst in self._listeners:
+            lst.send_message(msg)
 
 
 def load(path):
     with open(path) as fp:
-        data = yaml.load(fp.read())
-        return parse(Game, data)
+        yml = []
+        parsing = False
 
+        for line in fp:
+            if line.startswith('```yaml') or line.startswith('```yml'):
+                parsing = True
+            elif line.startswith('```'):
+                parsing = False
+            elif parsing:
+                yml.append(line)
 
-def parse(cls, data):
-    parsed_data = {}
+        data = "\n".join(yml)
+        game = yaml.load(data)
 
-    for k,v in data.items():
-        if isinstance(v, dict):
-            v = parse_item(v)
-        elif isinstance(v, list):
-            v = parse_list(v)
+        if isinstance(game, dict):
+            game = Game(**game)
 
-        parsed_data[k] = v
-
-    return cls(**parsed_data)
-
-
-def parse_item(data):
-    if len(data) != 1:
-        raise ValueError("")
-
-    for k,v in data.items():
-        cls = Meta.registry(k)
-        return parse(cls, v)
-
-
-def parse_list(data):
-    return [parse_item(i) for i in data]
+        return game
