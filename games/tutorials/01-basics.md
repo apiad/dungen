@@ -28,7 +28,7 @@ There are many ways to define this game in `dungen` with more advanced tools, bu
   * **look** describes the door and drawer, specifying is open, and that the player took the key that was inside.
   * **put key** moves to the state **Drawer open**.
   * **open door** moves to the state **Victory**.
-* **Victory**: displays the game is won and exits.
+* **Victory**: displays the game is won and let's you restart.
 
 This description basically defines the whole game. We use states to define the different moments in the game where progress is made, and actions to define what the player can do, and how he progresses through the game doing those actions.
 
@@ -46,37 +46,33 @@ Then we define the states. Each state requires a label (`start` in this example)
 states:
   start: !State
     actions:
-    # list of all the actions
-    # ...
+      # map of the actions
+      # ...
 ```
 
-The first action is a simple message that describes our current state. Most actions have a `label` property that briefly describes the action, and then specific parameters. The `Message` action has a message property.
+The first action is a simple message that describes our current state. Actions are defined with a label that briefly describes the action (_key_), and then specific parameters (including the type, i.e., `!Message`). The `Message` action has a `message` property.
 
 ```yaml
 # states:
   # actions:
-    - !Message
-      label: look
-      message: You are inside a room. The only way out seems
-               to be a closed door in front of you. There is
-               also a closed drawer nearby.
-    # other actions
+      look: !Message
+        message: You are inside a room. The only way out seems
+                to be a closed door in front of you. There is
+                also a closed drawer nearby.
 ```
 
 For the open door action, we'll show a different message:
 
 ```yaml
-    - !Message
-      label: open door
-      message: The door is locked. Maybe there is a key somewhere?
+      open door: !Message
+        message: The door is locked. Maybe there is a key somewhere?
 ```
 
 Finally, the `Goto` action simply changes the current state. The property `to` references another valid game state.
 
 ```yaml
-    - !Goto
-      label: open drawer
-      to: drawer-open
+      open drawer: !Goto
+        to: drawer-open
 ```
 
 From here on, we just need additional states to complete our game. We will continue with the `drawer-open` state. In this state the player can do one of two things, either take the key inside the drawer, or close the drawer again. The first action progresses to a new state, while the second one returns to the original state.
@@ -87,18 +83,14 @@ From here on, we just need additional states to complete our game. We will conti
   # ...
   drawer-open: !State
     actions:
-    - !Message
-      label: look
-      message: The drawer lies open. Inside there is rusty key.
-    - !Message
-      label: open door
-      message: The door is locked. Maybe that rusty key opens it?
-    - !Goto
-      label: close drawer
-      to: start
-    - !Goto
-      label: take key
-      to: has-key
+      look: !Message
+        message: The drawer lies open. Inside there is rusty key.
+      open door: !Message
+        message: The door is locked. Maybe that rusty key opens it?
+      close drawer: !Goto
+        to: start
+      take key: !Goto
+        to: has-key
 ```
 
 Once the player obtains the key, we are ready to let him open the door. Hence, in this new state the `open door` action is a `Goto` to the corresponding `victory` state:
@@ -109,16 +101,13 @@ Once the player obtains the key, we are ready to let him open the door. Hence, i
   # ...
   has-key: !State
     actions:
-    - !Message
-      label: look
-      message: The drawer is now empty, and the key is your hand.
-               The door is still wide-shut.
-    - !Goto
-      label: put key
-      to: drawer-open
-    - !Goto
-      label: open door
-      to: victory
+      look: !Message
+        message: The drawer is now empty, and the key is your hand.
+                The door is still wide-shut.
+      put key: !Goto
+        to: drawer-open
+      open door: !Goto
+        to: victory
 ```
 
 And the final state:
@@ -129,9 +118,10 @@ And the final state:
   # ...
   victory: !State
     actions:
-    - !Message
-      label: look
-      message: You've already won the game. What else do you want?
+      look: !Message
+        message: You've already won the game. What else do you want?
+      restart: !Goto
+        to: start
 ```
 
 Finally we just have to define the starting state:

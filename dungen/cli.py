@@ -17,13 +17,14 @@ class CliRunner:
         while True:
             print('')
             state:State = self.game.current_state()
-            actions = list(state.actions())
+            actions = state.actions()
+            actions_list = list(actions.values())
 
-            for i, action in enumerate(actions):
-                print(i+1, action.label())
+            for i, label in enumerate(actions):
+                print(i+1, label)
 
             option = int(input('> '))
-            actions[option - 1].execute(self.game)
+            actions_list[option - 1].execute(self.game)
 
 
 def main():

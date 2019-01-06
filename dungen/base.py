@@ -34,13 +34,6 @@ class State(DungenObj):
 
 
 class Action(DungenObj):
-    def __init__(self, label, **kwargs):
-        super(Action, self).__init__(**kwargs)
-        self._label = label
-
-    def label(self):
-        return self._label
-
     def execute(self, game):
         raise NotImplementedError()
 
