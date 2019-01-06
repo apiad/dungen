@@ -1,6 +1,6 @@
 # dungen
 
-A text-based dungeon-like games generator and engine in Python
+A text-based dungeon-like games generator and engine in Python.
 
 ## License
 

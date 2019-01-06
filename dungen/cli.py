@@ -23,8 +23,13 @@ class CliRunner:
             for i, label in enumerate(actions):
                 print(i+1, label)
 
-            option = int(input('> '))
-            actions_list[option - 1].execute(self.game)
+            try:
+                option = int(input('> '))
+                actions_list[option - 1].execute(self.game)
+            except (IndexError, ValueError):
+                pass
+            except EOFError:
+                return
 
 
 def main():

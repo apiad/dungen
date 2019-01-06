@@ -57,8 +57,8 @@ The first action is a simple message that describes our current state. Actions a
   # actions:
       look: !Message
         message: You are inside a room. The only way out seems
-                to be a closed door in front of you. There is
-                also a closed drawer nearby.
+                 to be a closed door in front of you. There is
+                 also a closed drawer nearby.
 ```
 
 For the open door action, we'll show a different message:
@@ -75,7 +75,8 @@ Finally, the `Goto` action simply changes the current state. The property `to` r
         to: drawer-open
 ```
 
-From here on, we just need additional states to complete our game. We will continue with the `drawer-open` state. In this state the player can do one of two things, either take the key inside the drawer, or close the drawer again. The first action progresses to a new state, while the second one returns to the original state.
+From here on, we just need additional states to complete our game. We will continue with the `drawer-open` state. In this state the player can do one of two things, either take the key inside the drawer, or close the drawer again. The first action progresses to a new state, while the second one returns to the original state. Here we introduce another type of action (`Actions`) which simply performs more than one action in a row, so you can change state and print a message within a single player interaction.
+
 
 ```yaml
 # states:
@@ -89,8 +90,11 @@ From here on, we just need additional states to complete our game. We will conti
         message: The door is locked. Maybe that rusty key opens it?
       close drawer: !Goto
         to: start
-      take key: !Goto
-        to: has-key
+      take key: !Actions
+        - !Message
+           message: You take the rusty key and place it in your pocket.
+        - !Goto
+          to: has-key
 ```
 
 Once the player obtains the key, we are ready to let him open the door. Hence, in this new state the `open door` action is a `Goto` to the corresponding `victory` state:
@@ -103,11 +107,14 @@ Once the player obtains the key, we are ready to let him open the door. Hence, i
     actions:
       look: !Message
         message: The drawer is now empty, and the key is your hand.
-                The door is still wide-shut.
+                 The door is still wide-shut.
       put key: !Goto
         to: drawer-open
-      open door: !Goto
-        to: victory
+      open door:  !Actions
+        - !Message
+          message: You open the door and step into the light :)
+        - !Goto
+          to: victory
 ```
 
 And the final state:

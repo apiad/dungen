@@ -7,8 +7,12 @@ def dobj(cls):
     def constructor(loader, node):
         instance = cls.__new__(cls)
         yield instance
-        state = loader.construct_mapping(node, deep=True)
-        instance.__init__(**state)
+        try:
+            state = loader.construct_mapping(node, deep=True)
+            instance.__init__(**state)
+        except yaml.constructor.ConstructorError:
+            state = loader.construct_sequence(node, deep=True)
+            instance.__init__(*state)
 
     yaml.add_constructor('!%s' % cls.__name__, constructor)
     return cls
@@ -36,6 +40,16 @@ class State(DungenObj):
 class Action(DungenObj):
     def execute(self, game):
         raise NotImplementedError()
+
+
+@dobj
+class Actions(Action):
+    def __init__(self, *actions):
+        self._actions = actions
+
+    def execute(self, game):
+        for action in self._actions:
+            action.execute(game)
 
 
 @dobj
