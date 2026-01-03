@@ -1,7 +1,7 @@
 session_id: default
-turn_count: 4
+turn_count: 10
 current_plot_id: escape_from_island
-current_node_id: considering_options
+current_node_id: convince_captain
 player_id: young_pirate
 actors:
   young_pirate:
@@ -10,7 +10,7 @@ actors:
     current_health: 1.0
     status_effects: []
     inventory: []
-    memory: The captain seems cautious, but open to conversation.
+    memory: expressed concerns about the crew's situation
     relationships: {}
   captain_flynn:
     id: captain_flynn

@@ -1,6 +1,7 @@
+from enum import Enum
 from typing import Any, List
 from lingo.llm import LLM, Message
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, create_model
 from dungen.models import World, Plot, GameState
 from dotenv import load_dotenv
 
@@ -148,43 +149,68 @@ Return a `SceneResolution` object with the story prose and state changes.
 
 
 async def resolve_scene(
-    world: World, plot: Plot, game_state: GameState, player_action: str
+    world: World,
+    plot: Plot,
+    game_state: GameState,
+    player_action: str
 ) -> SceneResolution:
     """
     Simulates a single turn.
     """
     llm = LLM()
 
-    # 1. Gather Context using the new GameState helpers
+    # 1. Gather Context
     current_node = plot.get_node(game_state.current_node_id)
     current_location = world.get_location(game_state.current_location_id)
-    local_actors = (
-        game_state.get_local_actors()
-    )  # Now works because GameState knows the location
+    local_actors = game_state.get_local_actors()
 
-    # 2. Construct the Prompt
+    # 2. Dynamic Schema Construction
+    # We create a dynamic Enum to restrict 'next_node_id' to only valid targets.
+    # This prevents the LLM from hallucinating nodes that don't exist.
+    valid_ids = sorted({t.target_node for t in current_node.transitions} | {current_node.id})
+
+    # We use generic keys (OPT_0, OPT_1...) so valid_ids can contain any string characters.
+    # The LLM sees the *values* in the JSON schema.
+    ValidNodesEnum = Enum('ValidNodesEnum', {f"OPT_{i}": nid for i, nid in enumerate(valid_ids)})
+
+    DynamicSceneResolution = create_model(
+        'DynamicSceneResolution',
+        narrative_prose=(str, Field(..., description="The story text describing what happened.")),
+        updates=(List[StateUpdate], Field(default_factory=list, description="List of mechanical changes.")),
+        next_node_id=(ValidNodesEnum, Field(..., description=f"The ID of the next narrative node. Must be one of: {valid_ids}"))
+    )
+
+    # 3. Construct the Prompt
     messages = [
         Message.system(DIRECTOR_SYSTEM_PROMPT),
+
         # Context Injection
         Message.user(f"--- CONTEXT: {current_node.title} ---"),
         Message.user(f"Atmosphere: {current_node.atmosphere}"),
         Message.user(f"Director Instructions: {current_node.description}"),
-        Message.user(
-            f"Location: {current_location.name} - {current_location.description}"
-        ),
+        Message.user(f"Location: {current_location.name} - {current_location.description}"),
+
         # Graph Logic
-        Message.user(f"Current node id: {current_node.id}"),
+        Message.user(f"Current Narrative Node: {current_node.id}"),
         Message.user("Potential Transitions:"),
         Message.user(current_node.transitions),
+
         # Actor States
         Message.user("--- ACTORS IN SCENE ---"),
         Message.user(local_actors),
+
         # The Trigger
         Message.user("--- ACTION ---"),
         Message.user(f"Player Action: {player_action}"),
-        Message.user("Resolve the scene."),
+        Message.user("Resolve the scene.")
     ]
 
-    # 3. Invoke LLM
-    result = await llm.create(SceneResolution, messages)
-    return result
+    # 4. Invoke LLM using the restricted dynamic model
+    result: Any = await llm.create(DynamicSceneResolution, messages)
+
+    # 5. Convert back to standard SceneResolution (extracting string from Enum)
+    return SceneResolution(
+        narrative_prose=result.narrative_prose,
+        updates=result.updates,
+        next_node_id=result.next_node_id.value
+    )
