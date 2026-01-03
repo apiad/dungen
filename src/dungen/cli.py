@@ -525,8 +525,20 @@ async def play_loop(
             spinner="aesthetic",
         ):
             try:
+                # 0. Prepare History Context
+                # We fetch the last 10 events that happened in the current location/scene
+                # to give the LLM conversation context.
+                recent_history = [
+                    e for e in ledger.events
+                    if e.location_id == state.current_location_id
+                ][-10:]
+
+                # A. Call the LLM with History
+                resolution = await resolve_scene(world, plot, state, action, recent_history)
+                last_resolution = resolution
+
                 # A. Call the LLM
-                resolution = await resolve_scene(world, plot, state, action)
+                resolution = await resolve_scene(world, plot, state, action, recent_history)
                 last_resolution = resolution
 
                 # B. Apply Updates

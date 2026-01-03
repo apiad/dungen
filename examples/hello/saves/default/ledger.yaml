@@ -139,3 +139,116 @@ events:
     his eyes fixed intently on you as you begin to plead your case.
   mechanical_updates:
   - young_pirate.memory=expressed concerns about the crew's situation
+- turn: 11
+  location_id: coconut_shores
+  node_id: convince_captain
+  actor_ids:
+  - young_pirate
+  - captain_flynn
+  player_action: so what do you say? -- i ask him
+  narrative_outcome: Captain Flynn's gaze slowly returns to you, his eyes narrowing
+    as he takes a moment to collect his thoughts. The sound of the waves and the chatter
+    of the people on the beach seem to fade into the background as he responds in
+    a deep, measured tone, 'I've heard your concerns, young pirate. Leaving Tortuga's
+    Isle won't be easy, but I also don't want to see my crew suffering. Tell you what,
+    I'll consider our options, but I need something more to convince me it's the right
+    time to leave.'
+  mechanical_updates: []
+- turn: 12
+  location_id: coconut_shores
+  node_id: convince_captain
+  actor_ids:
+  - young_pirate
+  - captain_flynn
+  player_action: '''ok ill go talk to the crew, if they all want to go, would you
+    consider going?'' i ask'
+  narrative_outcome: You ask Captain Flynn if he'd consider leaving Tortuga's Isle
+    if the crew is in agreement. The captain's expression turns thoughtful, his eyes
+    scanning the bustling beach as he weighs his options. The sound of the waves and
+    the chatter of the sailors create a soothing background hum, but the tension between
+    you remains palpable. Captain Flynn takes a slow drag on his cigar, exhaling a
+    plume of smoke as he considers your proposal.
+  mechanical_updates: []
+- turn: 13
+  location_id: coconut_shores
+  node_id: convince_captain
+  actor_ids:
+  - young_pirate
+  - captain_flynn
+  player_action: damn it, ill go talk to the other cew members
+  narrative_outcome: You nod, determination etched on your face. 'Alright, I'll go
+    talk to the crew, see what they think. If they're all for leaving, will you consider
+    it, Captain?' The captain's eyes narrow, his gaze piercing as he considers your
+    proposal. The sound of the waves and the chatter of the sailors create a soothing
+    background hum, but the tension between you remains palpable. Captain Flynn takes
+    a slow drag on his cigar, exhaling a plume of smoke as he weighs his options.
+    After a moment of contemplative silence, he responds, 'Very well, go talk to them.
+    If they're all in agreement, I'll consider our departure.'
+  mechanical_updates:
+  - young_pirate.current_goal=talk_to_crew
+- turn: 14
+  location_id: coconut_shores
+  node_id: agree_to_leave
+  actor_ids:
+  - young_pirate
+  - captain_flynn
+  player_action: go talk to the crew
+  narrative_outcome: You nod, determination etched on your face. You make your way
+    through the bustling beach, greeting your fellow crew members as you go. The sound
+    of the waves and the smell of fresh seafood fill the air, but your mind is focused
+    on the task at hand. You gather the crew and begin to discuss the possibility
+    of leaving Tortuga's Isle, sharing your concerns about the dwindling supplies
+    and the lack of progress in finding the treasure. The crew's reactions are mixed,
+    but as you press on, you sense a growing unease among them. After a few minutes
+    of discussion, you take a tally of their opinions and find that the majority are
+    in favor of leaving.
+  mechanical_updates: []
+- turn: 15
+  location_id: coconut_shores
+  node_id: gather_support
+  actor_ids:
+  - young_pirate
+  - captain_flynn
+  player_action: go tell captain flynn
+  narrative_outcome: You make your way back to Captain Flynn, the sound of the waves
+    and the chatter of the sailors filling the air. The captain looks up at your approach,
+    his eyes narrowing slightly as he awaits your report. You take a deep breath,
+    'Captain, I've spoken to the crew. They're in agreement, we should leave Tortuga's
+    Isle.' The captain's expression remains stoic, but a hint of a smile plays on
+    his lips. He nods slowly, 'Very well, if the crew is in agreement, then I'll not
+    stand in their way. We'll prepare to set sail.'
+  mechanical_updates:
+  - captain_flynn.current_health=1.0
+- turn: 16
+  location_id: coconut_shores
+  node_id: enough_support
+  actor_ids:
+  - young_pirate
+  - captain_flynn
+  player_action: agree with captain, and thank him
+  narrative_outcome: You nod in agreement with Captain Flynn's decision, a sense of
+    relief washing over you. 'Thank you, Captain,' you say, a smile spreading across
+    your face. 'I know this wasn't an easy decision, but I believe it's for the best.'
+    Captain Flynn nods, his expression serious, but a hint of approval in his eyes.
+    'Alright, let's get the crew moving. We've got a long journey ahead of us.' The
+    sound of the waves and the chatter of the sailors fill the air as the crew begins
+    to stir, preparing for their departure.
+  mechanical_updates:
+  - young_pirate.status=relieved
+  - captain_flynn.status=decisive
+- turn: 17
+  location_id: coconut_shores
+  node_id: convince_captain_again
+  actor_ids:
+  - young_pirate
+  - captain_flynn
+  player_action: lets go
+  narrative_outcome: As the crew begins to stir, preparing for their departure, Captain
+    Flynn's expression turns resolute. He takes a final drag on his cigar, then stubs
+    it out in the sand. 'Alright, let's get moving. We've got a long journey ahead
+    of us.' The sound of the waves and the chatter of the sailors fill the air as
+    the crew springs into action, scrambling to ready the ships. The salty sea air
+    seems to invigorate them, and a sense of renewed purpose settles over the crew.
+  mechanical_updates:
+  - young_pirate.current_health=1.0
+  - captain_flynn.current_health=1.0
