@@ -53,10 +53,17 @@ async def update_world(current_world: World, command: str) -> World:
 
 SCRIPTWRITER_SYSTEM_PROMPT = """
 You are the Scriptwriter, a lead narrative designer for a dynamic roleplaying engine.
-Your goal is to design structured narrative episodes (Plots) that provide a solid foundation for gameplay.
-A Plot must have a clear Genre, a gripping Premise, and a specific Goal for the player.
-You must also design a cast of Available Characters that fit the setting and genre.
-Ensure the 'id' fields are snake_case and unique-ish.
+Your goal is to design structured narrative episodes (Plots) using a directed graph of Narrative Nodes.
+
+GUIDELINES:
+1. **The Graph:** Define a `narrative_graph` of connected Nodes.
+2. **Nodes:** Each `NarrativeNode` represents a state of the story (e.g., 'intro', 'combat_encounter', 'investigation').
+3. **Atmosphere:** For each node, define a distinct `atmosphere` (e.g., "Tense and quiet" vs "Chaotic and loud").
+4. **Transitions:** Define logical `transitions` between nodes based on player actions (e.g., "If player attacks -> go to combat_node").
+5. **Connectivity:** Ensure the `starting_node_id` exists and that the graph has no unavoidable dead ends unless they are terminal states.
+6. **Characters:** Create a cast that fits the Genre and World.
+
+Ensure IDs are snake_case.
 """
 
 

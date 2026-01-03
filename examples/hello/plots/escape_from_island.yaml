@@ -1,0 +1,124 @@
+id: escape_from_island
+title: Mutiny on Tortuga's Isle
+genre: Adventure
+premise: A young pirate must convince the crew of the Drunken Buccaneers to leave
+  Tortuga's Isle in search of better fortunes, but faces opposition from the captain.
+goal: Convince Captain Flynn to set sail with the crew.
+starting_location_id: coconut_shores
+narrative_graph:
+- id: intro_gathering
+  title: Gathering the Crew
+  description: The player, a young pirate, stands on the beach of Coconut Shores,
+    looking out at the makeshift camp of the Drunken Buccaneers. The crew is scattered,
+    some fishing, others repairing the ship, and a few drinking and singing.
+  atmosphere: Lively and bustling
+  transitions:
+  - target_node: meet_captain_flynn
+    condition: Player approaches Captain Flynn
+  is_terminal: false
+- id: meet_captain_flynn
+  title: A Word with Captain Flynn
+  description: The player approaches Captain Flynn, who is sitting on a crate, nursing
+    a mug of grog. He looks up, eyeing the player with a mix of curiosity and suspicion.
+  atmosphere: Tense and quiet
+  transitions:
+  - target_node: convince_captain
+    condition: Player convinces Captain Flynn to listen
+  is_terminal: false
+- id: convince_captain
+  title: A Persuasive Argument
+  description: The player tries to convince Captain Flynn that it's time to leave
+    Tortuga's Isle and seek better fortunes elsewhere. The captain listens intently,
+    but his expression suggests he's not easily swayed.
+  atmosphere: Intensive and persuasive
+  transitions:
+  - target_node: refuse_to_leave
+    condition: Captain Flynn refuses to leave
+  - target_node: agree_to_leave
+    condition: Captain Flynn agrees to consider leaving
+  is_terminal: false
+- id: refuse_to_leave
+  title: Refusal and Defiance
+  description: Captain Flynn scoffs at the player's suggestion, saying Tortuga's Isle
+    is as good a place as any to find treasure and that he's not about to leave without
+    a fight.
+  atmosphere: Confrontational and heated
+  transitions:
+  - target_node: fight_captain
+    condition: Player decides to fight Captain Flynn
+  is_terminal: false
+- id: agree_to_leave
+  title: A Glimmer of Hope
+  description: Captain Flynn agrees to consider leaving Tortuga's Isle, but warns
+    the player that the crew won't be easy to convince. He tasks the player with speaking
+    to the crew and gathering support.
+  atmosphere: Hopeful and cautious
+  transitions:
+  - target_node: gather_support
+    condition: Player begins gathering support from the crew
+  is_terminal: false
+- id: fight_captain
+  title: Mutiny
+  description: The player engages in a fierce duel with Captain Flynn. The outcome
+    will determine the fate of the crew and the player's future.
+  atmosphere: Intense and violent
+  transitions:
+  - target_node: win_mutiny
+    condition: Player defeats Captain Flynn
+  is_terminal: false
+- id: win_mutiny
+  title: Victory and New Leadership
+  description: The player emerges victorious, having defeated Captain Flynn. The crew,
+    now leaderless, looks to the player for guidance.
+  atmosphere: Triumphant and uncertain
+  transitions: []
+  is_terminal: true
+- id: gather_support
+  title: Winning Hearts and Minds
+  description: The player talks to various crew members, listening to their concerns
+    and persuading them to support the idea of leaving Tortuga's Isle.
+  atmosphere: Persuasive and engaging
+  transitions:
+  - target_node: enough_support
+    condition: Player gathers enough support
+  is_terminal: false
+- id: enough_support
+  title: A United Crew
+  description: With enough support gathered, the player presents their case to Captain
+    Flynn, who now faces a united crew rather than a single dissenting voice.
+  atmosphere: Unified and pressuring
+  transitions:
+  - target_node: convince_captain_again
+    condition: Player convinces Captain Flynn to leave
+  is_terminal: false
+- id: convince_captain_again
+  title: Final persuasion
+  description: Faced with a united crew, Captain Flynn finally relents, agreeing to
+    set sail and seek new fortunes.
+  atmosphere: Relieved and hopeful
+  transitions: []
+  is_terminal: true
+starting_node_id: intro_gathering
+available_characters:
+- id: young_pirate
+  name: Jack Sparrow
+  role: Young and ambitious pirate
+  description: A charismatic and cunning young pirate with a dream of finding treasure
+    and making a name for himself.
+  traits:
+  - charismatic
+  - ambitious
+  - reckless
+  resilience: 0.7
+  sociability: 0.9
+- id: captain_flynn
+  name: Captain Flynn
+  role: Captain of the Drunken Buccaneers
+  description: A seasoned pirate captain with a talent for leadership and a penchant
+    for hard drinking.
+  traits:
+  - confident
+  - stubborn
+  - alcoholic
+  resilience: 0.8
+  sociability: 0.6
