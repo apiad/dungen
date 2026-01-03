@@ -45,11 +45,12 @@ class World(BaseModel):
     locations: List[Location] = Field(default_factory=list)
     factions: List[Faction] = Field(default_factory=list)
 
-    def get_location(self, location_id: str) -> Optional[Location]:
+    def get_location(self, location_id: str) -> Location:
         for loc in self.locations:
             if loc.id == location_id:
                 return loc
-        return None
+
+        raise KeyError(location_id)
 
 
 # --- Roleplaying Models (Director) ---
@@ -139,8 +140,86 @@ class Plot(BaseModel):
         default_factory=list, description="Pre-generated cast options"
     )
 
-    def get_node(self, node_id: str) -> Optional[NarrativeNode]:
+    def get_node(self, node_id: str) -> NarrativeNode:
         for node in self.narrative_graph:
             if node.id == node_id:
                 return node
-        return None
+
+        raise KeyError(node_id)
+
+
+# --- Runtime / Session Models (The Simulation) ---
+
+
+class ActorState(BaseModel):
+    """
+    The dynamic state of a character in a specific session.
+    Changes every turn (health, location, memory).
+    """
+    id: str = Field(..., description="Links to the Character blueprint ID")
+    location_id: str = Field(..., description="Current location in the world")
+    current_health: float = Field(1.0, description="Health percentage (0.0 - 1.0)")
+    status_effects: List[str] = Field(default_factory=list, description="Tags like 'alert', 'unconscious', 'hiding'")
+    inventory: List[str] = Field(default_factory=list, description="List of item IDs")
+    memory: List[str] = Field(
+        default_factory=list,
+        description="Short-term observations (e.g., 'Saw player draw weapon')"
+    )
+    relationships: Dict[str, float] = Field(
+        default_factory=dict,
+        description="Dynamic reputation with other actors (-1.0 to 1.0)"
+    )
+
+class GameState(BaseModel):
+    """
+    The complete snapshot of a running game session.
+    Stored in state.yaml.
+    """
+    session_id: str
+    turn_count: int = 0
+
+    # Narrative Context
+    current_plot_id: str
+    current_node_id: str
+
+    # The Protagonist (The anchor for the simulation)
+    player_id: str = Field(..., description="The ID of the actor controlled by the user")
+
+    # Simulation Data
+    # Registry of all active/tracked actors. Key is actor ID.
+    actors: Dict[str, ActorState] = Field(default_factory=dict)
+
+    world_flags: Dict[str, bool] = Field(
+        default_factory=dict,
+        description="Global switches (e.g., 'alarm_triggered': True)"
+    )
+
+    @property
+    def player(self) -> ActorState:
+        """Helper to get the player's actor object."""
+        return self.actors[self.player_id]
+
+    @property
+    def current_location_id(self) -> str:
+        """The 'Camera' location (always follows the player)."""
+        return self.player.location_id
+
+    def get_actor(self, actor_id: str) -> Optional[ActorState]:
+        return self.actors.get(actor_id)
+
+    def get_local_actors(self) -> List[ActorState]:
+        """Returns all actors (Player + NPCs) in the current scene."""
+        loc = self.current_location_id
+        return [a for a in self.actors.values() if a.location_id == loc]
+
+class Event(BaseModel):
+    turn: int
+    location_id: str
+    node_id: str
+    actor_ids: List[str]
+    player_action: str
+    narrative_outcome: str
+    mechanical_updates: List[str]
+
+class Ledger(BaseModel):
+    events: List[Event] = Field(default_factory=list)

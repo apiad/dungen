@@ -2,6 +2,8 @@ import typer
 import asyncio
 import os
 import yaml
+import time
+from typing import List, Optional, Tuple
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
@@ -11,8 +13,17 @@ from rich.text import Text
 from rich import box
 
 # Import from our modules
-from dungen.models import World, Plot
-from dungen.llm import generate_world, update_world, generate_plot, update_plot
+from dungen.models import World, Plot, GameState, ActorState, Ledger, Event, Character
+from dungen.llm import (
+    generate_world,
+    update_world,
+    generate_plot,
+    update_plot,
+    resolve_scene,
+    SceneResolution,
+)
+
+# ... (Existing App and Constants) ...
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -24,6 +35,7 @@ console = Console()
 # --- CONSTANTS ---
 WORLD_FILE = "world.yaml"
 PLOTS_DIR = "plots"
+SAVES_DIR = "saves"
 
 
 # --- PERSISTENCE HELPERS ---
@@ -299,6 +311,281 @@ def plot(name: str):
     Example: dungen plot heist_mission
     """
     asyncio.run(plot_loop(name))
+
+
+# --- SESSION MANAGEMENT ---
+
+
+def get_save_path(session_id: str) -> str:
+    """Returns the directory path for a specific session."""
+    return os.path.join(SAVES_DIR, session_id)
+
+
+def save_game(state: GameState, ledger: Ledger):
+    """Saves the dynamic session state and history."""
+    path = get_save_path(state.session_id)
+    os.makedirs(path, exist_ok=True)
+
+    with open(os.path.join(path, "state.yaml"), "w") as f:
+        yaml.dump(state.model_dump(), f, sort_keys=False)
+
+    with open(os.path.join(path, "ledger.yaml"), "w") as f:
+        yaml.dump(ledger.model_dump(), f, sort_keys=False)
+
+
+def load_game(session_id: str) -> Optional[Tuple[GameState, Ledger]]:
+    """Loads a saved game if it exists."""
+    path = get_save_path(session_id)
+    if not os.path.exists(path):
+        return None
+
+    try:
+        with open(os.path.join(path, "state.yaml"), "r") as f:
+            state = GameState(**yaml.safe_load(f))
+
+        with open(os.path.join(path, "ledger.yaml"), "r") as f:
+            ledger = Ledger(**yaml.safe_load(f))
+
+        return state, ledger
+    except Exception as e:
+        console.print(f"[bold red]Error loading save:[/bold red] {e}")
+        return None
+
+
+def initialize_session(
+    world: World, plot: Plot, player_char: Character, session_id: str
+) -> Tuple[GameState, Ledger]:
+    """Sets up the initial state, spawning characters in the starting location."""
+
+    actors = {}
+
+    # 1. Spawn Player
+    player_state = ActorState(
+        id=player_char.id,
+        location_id=plot.starting_location_id,
+        current_health=1.0,
+        status_effects=[],
+        inventory=[],
+        relationships={},
+    )
+    actors[player_char.id] = player_state
+
+    # 2. Spawn other Cast Members (NPCs)
+    # For V0, we spawn everyone in the starting location so there is immediate interaction.
+    for char in plot.available_characters:
+        if char.id != player_char.id:
+            npc_state = ActorState(
+                id=char.id,
+                location_id=plot.starting_location_id,
+                current_health=1.0,
+                status_effects=[],
+                relationships={},
+            )
+            actors[char.id] = npc_state
+
+    # 3. Create State
+    state = GameState(
+        session_id=session_id,
+        turn_count=0,
+        current_plot_id=plot.id,
+        current_node_id=plot.starting_node_id,
+        player_id=player_char.id,
+        actors=actors,
+        world_flags={},
+    )
+
+    # 4. Create Ledger
+    ledger = Ledger(events=[])
+
+    return state, ledger
+
+
+# --- UI COMPONENTS FOR PLAY MODE ---
+
+
+def get_hud(world: World, state: GameState, plot: Plot) -> Panel:
+    """Heads Up Display showing status and location."""
+
+    # Location Info
+    loc = world.get_location(state.current_location_id)
+    loc_name = loc.name if loc else "Unknown Location"
+
+    # Node Info (The Narrative Vibe)
+    node = plot.get_node(state.current_node_id)
+    node_title = node.title if node else "Unknown Chapter"
+
+    # Player Status
+    player = state.player
+    hp_percent = int(player.current_health * 100)
+    hp_color = "green" if hp_percent > 50 else "red"
+    hp_bar = f"[{hp_color}]{hp_percent}% HP[/{hp_color}]"
+
+    # Status Effects
+    effects = ", ".join(player.status_effects) if player.status_effects else "Normal"
+
+    # Grid Layout
+    grid = Table.grid(expand=True)
+    grid.add_column()
+    grid.add_column(justify="right")
+
+    grid.add_row(
+        f"[bold cyan]{loc_name}[/bold cyan]",
+        f"[bold magenta]{node_title}[/bold magenta]",
+    )
+    grid.add_row(f"[dim]Turn {state.turn_count}[/dim]", f"{hp_bar} | {effects}")
+
+    return Panel(grid, style="white on black", box=box.HEAVY_EDGE)
+
+
+def get_scene_view(resolution: Optional[SceneResolution], ledger: Ledger) -> Panel:
+    """Renders the main narrative prose."""
+    if resolution:
+        # Show the latest result from the Director
+        text = resolution.narrative_prose
+    elif ledger.events:
+        # Show the last recorded event if loading a game
+        text = ledger.events[-1].narrative_outcome
+    else:
+        text = "[italic]The story begins...[/italic]"
+
+    return Panel(Markdown(text), title="Chronicle", border_style="cyan", padding=(1, 2))
+
+
+# --- THE PLAY LOOP ---
+
+
+async def play_loop(
+    session_id: str, new_game: bool = False, plot_name: str = None, char_id: str = None
+):
+    """The Director Mode REPL."""
+
+    # 1. Load World Context
+    world = load_world()
+    if not world:
+        console.print("[red]No world found. Run 'dungen build' first.[/red]")
+        return
+
+    # 2. Initialize or Load Session
+    if new_game:
+        if not plot_name or not char_id:
+            console.print(
+                "[red]Error: New games require --plot and --character arguments.[/red]"
+            )
+            return
+
+        plot = load_plot(f"{plot_name}.yaml")
+        if not plot:
+            console.print(f"[red]Plot '{plot_name}' not found.[/red]")
+            return
+
+        # Find character definition
+        player_char = next(
+            (c for c in plot.available_characters if c.id == char_id), None
+        )
+        if not player_char:
+            console.print(f"[red]Character '{char_id}' not found in plot.[/red]")
+            return
+
+        with console.status("[bold blue]Setting up the simulation...[/bold blue]"):
+            state, ledger = initialize_session(world, plot, player_char, session_id)
+            save_game(state, ledger)
+            console.print(f"[green]New session '{session_id}' initialized.[/green]")
+            time.sleep(1)
+    else:
+        loaded = load_game(session_id)
+        if not loaded:
+            console.print(f"[red]Session '{session_id}' not found.[/red]")
+            return
+        state, ledger = loaded
+        plot = load_plot(f"{state.current_plot_id}.yaml")
+
+    # 3. Main Loop
+    last_resolution = None
+
+    while True:
+        console.clear()
+
+        # Render
+        hud = get_hud(world, state, plot)
+        scene = get_scene_view(last_resolution, ledger)
+
+        console.print(hud)
+        console.print(scene)
+
+        # Input
+        action = console.input("\n[bold green]What do you do? > [/bold green]")
+        if action.lower() in ["quit", "exit"]:
+            save_game(state, ledger)
+            console.print("[bold green]Game saved. Goodbye.[/bold green]")
+            break
+
+        # Simulation Step
+        with console.status(
+            "[bold magenta]The Director is resolving the scene...[/bold magenta]",
+            spinner="aesthetic",
+        ):
+            try:
+                # A. Call the LLM
+                resolution = await resolve_scene(world, plot, state, action)
+                last_resolution = resolution
+
+                # B. Apply Updates
+                for update in resolution.updates:
+                    if update.target_id == "WORLD":
+                        # Handle global flags
+                        state.world_flags[update.field] = update.value
+                    elif update.target_id in state.actors:
+                        # Handle actor updates (health, location, etc.)
+                        actor = state.actors[update.target_id]
+                        if hasattr(actor, update.field):
+                            setattr(actor, update.field, update.value)
+
+                # C. Update Narrative Flow
+                state.current_node_id = resolution.next_node_id
+                state.turn_count += 1
+
+                # D. Log to Ledger
+                # Convert updates to simple strings for the log
+                mech_updates = [
+                    f"{u.target_id}.{u.field}={u.value}" for u in resolution.updates
+                ]
+
+                event = Event(
+                    turn=state.turn_count,
+                    location_id=state.current_location_id,
+                    node_id=state.current_node_id,
+                    actor_ids=list(state.actors.keys()),
+                    player_action=action,
+                    narrative_outcome=resolution.narrative_prose,
+                    mechanical_updates=mech_updates,
+                )
+                ledger.events.append(event)
+
+                # E. Auto-Save
+                save_game(state, ledger)
+
+            except Exception as e:
+                console.print(f"[bold red]Simulation Error:[/bold red] {e}")
+                console.input("[Press Enter to continue]")
+
+
+@app.command()
+def play(
+    session: str = typer.Option("default", help="Session ID to save/load"),
+    new: bool = typer.Option(False, "--new", "-n", help="Start a new game"),
+    plot: str = typer.Option(None, help="Plot ID (required for new game)"),
+    character: str = typer.Option(None, help="Character ID (required for new game)"),
+):
+    """
+    Director Mode: Play the game.
+
+    Resume default:
+      dungen play
+
+    Start new game:
+      dungen play --new --session my_save --plot heist --character vance
+    """
+    asyncio.run(play_loop(session, new, plot, character))
 
 
 if __name__ == "__main__":

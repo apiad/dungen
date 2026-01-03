@@ -1,0 +1,23 @@
+session_id: default
+turn_count: 4
+current_plot_id: escape_from_island
+current_node_id: considering_options
+player_id: young_pirate
+actors:
+  young_pirate:
+    id: young_pirate
+    location_id: coconut_shores
+    current_health: 1.0
+    status_effects: []
+    inventory: []
+    memory: The captain seems cautious, but open to conversation.
+    relationships: {}
+  captain_flynn:
+    id: captain_flynn
+    location_id: coconut_shores
+    current_health: 1.0
+    status_effects: []
+    inventory: []
+    memory: []
+    relationships: {}
+world_flags: {}

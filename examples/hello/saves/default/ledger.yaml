@@ -1,0 +1,64 @@
+events:
+- turn: 1
+  location_id: coconut_shores
+  node_id: intro_gathering
+  actor_ids:
+  - young_pirate
+  - captain_flynn
+  player_action: look around
+  narrative_outcome: As you scan the beach, the warm sunlight catches the glistening
+    water droplets on the leaves of the coconut trees, casting dappled shadows across
+    the sand. The air is alive with the smell of saltwater and the sound of seagulls
+    wheeling overhead. To your left, a group of sailors are busy repairing the hull
+    of a ship, their laughter and shouts mingling with the crash of the waves. Nearby,
+    a few fishermen are unloading their catch, the day's haul laid out on a makeshift
+    stall. The sound of a lively tune drifts over from a cluster of musicians, who
+    are playing a lively rhythm on a mix of instruments. Ahead of you, Captain Flynn
+    stands at the edge of the water, eyeing the horizon with a thoughtful expression.
+  mechanical_updates:
+  - 'young_pirate.memory={''details'': ''The layout of Coconut Shores, including the
+    position of the crew, the ship, and the surrounding environment.''}'
+- turn: 2
+  location_id: coconut_shores
+  node_id: meet_captain_flynn
+  actor_ids:
+  - young_pirate
+  - captain_flynn
+  player_action: aproach captain flyn
+  narrative_outcome: As you approach Captain Flynn, he looks up from the map spread
+    out before him on a makeshift table, a mug of grog in one hand. His eyes, a piercing
+    blue, narrow slightly as he takes in your approach. The rest of the crew continues
+    their various activities, seemingly oblivious to your movement towards their captain.
+  mechanical_updates:
+  - 'young_pirate.memory={''details'': ''The layout of Coconut Shores, including the
+    position of the crew, the ship, and the surrounding environment. Captain Flynn
+    is now standing, awaiting your interaction.''}'
+  - NARRATIVE.next_node_id=meet_captain_flynn
+- turn: 3
+  location_id: coconut_shores
+  node_id: convince_captain
+  actor_ids:
+  - young_pirate
+  - captain_flynn
+  player_action: tell captain we should set sail, the crew is growing unrest
+  narrative_outcome: You approach Captain Flynn, who looks up at you with a mix of
+    curiosity and suspicion. You explain that you think it's time to set sail, but
+    the crew is growing restless. The captain takes a sip of his grog, eyeing you
+    carefully.
+  mechanical_updates:
+  - captain_flynn.current_health=1.0
+  - young_pirate.memory=The captain seems cautious, but open to conversation.
+- turn: 4
+  location_id: coconut_shores
+  node_id: considering_options
+  actor_ids:
+  - young_pirate
+  - captain_flynn
+  player_action: ask him if we should leave
+  narrative_outcome: You approach Captain Flynn, who's standing at the edge of the
+    dock, gazing out at the sea. The sound of the waves and the chatter of the crowd
+    fade into the background as you clear your throat to get his attention. He turns
+    to face you, his expression a mixture of curiosity and caution. 'Leave Tortuga's
+    Isle?' he repeats, his voice low and measured. 'What makes you think it's time
+    to go, lad?'
+  mechanical_updates: []
