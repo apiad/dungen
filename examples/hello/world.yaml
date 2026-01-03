@@ -1,0 +1,58 @@
+name: Tortuga's Isle
+description: A lawless pirate haven shrouded in mystery and hidden riches, where the
+  sun dips into the sea and paints the sky with hues of gold and crimson. Legends
+  speak of a treasure hidden deep within the island's heart, guarded by the spirits
+  of the sea and the cunning pirates who call this place home.
+locations:
+- id: coconut_shores
+  name: Coconut Shores
+  description: A bustling beach lined with dense coconut groves and weathered wooden
+    docks. The warm sand feels like silk between your toes as the sound of waves crashing
+    against the shore creates a soothing melody. The salty air is filled with the
+    smell of fresh seafood and the chatter of sailors and pirates.
+  connections:
+  - pirate_cove
+  - sunken_wreck
+- id: pirate_cove
+  name: Pirate's Cove
+  description: A secluded, crescent-shaped bay nestled among towering cliffs and dense
+    foliage. The air is thick with the smell of gunpowder, rum, and adventure. A ramshackle
+    assortment of pirate ships and makeshift shelters line the bay, giving it a chaotic
+    yet welcoming atmosphere.
+  connections:
+  - coconut_shores
+  - hidden_lagoon
+- id: sunken_wreck
+  name: The Sunken Wreck
+  description: The skeletal remains of a centuries-old galleon lie half-submerged
+    in the crystal-clear waters just off the coast. Schools of tropical fish dart
+    through the rusty hull, and the eerie silence of the wreck belies the tales of
+    hidden treasures and ancient curses.
+  connections:
+  - coconut_shores
+- id: pirate_cave
+  name: The Pirate's Cave
+  description: A vast, dimly lit cavern hidden behind a cascading waterfall, accessible
+    only through a narrow, winding passage. The air inside is cool and damp, filled
+    with the sound of dripping water and the whispers of forgotten legends. Ancient
+    torches flicker, casting eerie shadows on the walls as the path to the hidden
+    treasure beckons.
+  connections:
+  - pirate_cove
+- id: hidden_lagoon
+  name: The Hidden Lagoon
+  description: A serene and isolated body of water, tucked away behind a thick veil
+    of foliage and towering palm trees. The lagoon's glassy surface reflects the vibrant
+    hues of the surrounding jungle, creating a breathtaking sight. A weathered, ancient
+    map etched into a stone pedestal hints at the location of the fated treasure.
+  connections:
+  - pirate_cove
+factions:
+- id: drunken_sailors
+  name: The Drunken Buccaneers
+  ideology: Survival and Salvation
+  description: A ragtag group of stranded pirates, sailors, and smugglers who have
+    washed up on Tortuga's Isle after their ship sank. They eke out a meager existence,
+    scavenging for food and supplies while trying to repair their damaged vessel or
+    find a way off the island. The group is led by the charismatic but hard-drinking
+    Captain Flynn, who is determined to get his crew back to sea.
