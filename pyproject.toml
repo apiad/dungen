@@ -1,0 +1,19 @@
+[project]
+name = "dungen"
+version = "0.1.0"
+description = "A text-based world builder, roleplay engine, and story generator."
+readme = "README.md"
+authors = [
+    { name = "Alejandro Piad", email = "apiad@apiad.net" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "lingo-ai>=0.4.0",
+    "pydantic>=2.12.5",
+    "pyyaml>=6.0.3",
+    "typer>=0.21.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
