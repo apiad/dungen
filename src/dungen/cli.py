@@ -28,6 +28,7 @@ PLOTS_DIR = "plots"
 
 # --- PERSISTENCE HELPERS ---
 
+
 def save_world(world: World):
     """Persist the World object to YAML."""
     with open(WORLD_FILE, "w") as f:
@@ -63,6 +64,7 @@ def load_plot(filename: str) -> Plot | None:
 
 # --- UI COMPONENTS ---
 
+
 def get_main_view(history: list, persona: str) -> Panel:
     """Generates the main conversation view."""
     if not history:
@@ -78,7 +80,9 @@ The studio is open. You can:
 *Type 'exit' to save and quit.*
             """
         )
-        return Panel(welcome_md, title="Activity Log", border_style="white", box=box.ROUNDED)
+        return Panel(
+            welcome_md, title="Activity Log", border_style="white", box=box.ROUNDED
+        )
 
     # Render the last few history items
     table = Table(box=None, show_header=False, padding=(0, 0, 1, 0))
@@ -97,7 +101,11 @@ def get_world_sidebar(world: World) -> Panel:
     """Generates the side panel showing the current world state."""
     info_text = Text()
     info_text.append(f"{world.name}\n", style="bold cyan underline")
-    desc = world.description[:150] + "..." if len(world.description) > 150 else world.description
+    desc = (
+        world.description[:150] + "..."
+        if len(world.description) > 150
+        else world.description
+    )
     info_text.append(f"{desc}\n\n", style="italic dim")
 
     info_text.append("Locations:\n", style="bold green")
@@ -155,6 +163,7 @@ def get_plot_sidebar(plot: Plot) -> Panel:
 
 # --- LOOPS ---
 
+
 async def build_loop():
     """The Architect Mode Loop (Worldbuilding)."""
     world = load_world()
@@ -162,11 +171,23 @@ async def build_loop():
 
     if not world:
         console.clear()
-        console.print(Panel("[bold green]dungen: Architect Mode[/bold green]", subtitle="Initialization"))
-        console.print("[yellow]No 'world.yaml' found. Let's create a new world.[/yellow]")
-        prompt = console.input("[bold green]Describe your world concept > [/bold green]")
+        console.print(
+            Panel(
+                "[bold green]dungen: Architect Mode[/bold green]",
+                subtitle="Initialization",
+            )
+        )
+        console.print(
+            "[yellow]No 'world.yaml' found. Let's create a new world.[/yellow]"
+        )
+        prompt = console.input(
+            "[bold green]Describe your world concept > [/bold green]"
+        )
 
-        with console.status("[bold green]The Architect is designing the blueprint...[/bold green]", spinner="earth"):
+        with console.status(
+            "[bold green]The Architect is designing the blueprint...[/bold green]",
+            spinner="earth",
+        ):
             world = await generate_world(prompt)
         save_world(world)
         history.append(("user", f"Create world: {prompt}"))
@@ -196,19 +217,40 @@ async def build_loop():
 
 async def plot_loop(name: str):
     """The Scriptwriter Mode Loop (Plot Design)."""
+    # 1. Load the world context first
+    world = load_world()
+    if not world:
+        console.print("[bold red]Error:[/bold red] No 'world.yaml' found.")
+        console.print("You must build a world before writing a script.")
+        console.print("Run [green]dungen build[/green] first.")
+        return
+
     filename = f"{name}.yaml"
     plot = load_plot(filename)
     history = []
 
     if not plot:
         console.clear()
-        console.print(Panel("[bold magenta]dungen: Scriptwriter Mode[/bold magenta]", subtitle="Pre-Production"))
-        console.print(f"[yellow]Plot '{name}' not found. Let's write a new script.[/yellow]")
-        prompt = console.input("[bold magenta]Describe the story premise or genre > [/bold magenta]")
+        console.print(
+            Panel(
+                "[bold magenta]dungen: Scriptwriter Mode[/bold magenta]",
+                subtitle="Pre-Production",
+            )
+        )
+        console.print(f"[dim]World Context: {world.name}[/dim]")
+        console.print(
+            f"[yellow]Plot '{name}' not found. Let's write a new script.[/yellow]"
+        )
+        prompt = console.input(
+            "[bold magenta]Describe the story premise or genre > [/bold magenta]"
+        )
 
-        with console.status("[bold magenta]The Scriptwriter is drafting the episode...[/bold magenta]", spinner="bouncingBall"):
-            plot = await generate_plot(prompt)
-            # Ensure the ID matches the filename provided by user for consistency
+        with console.status(
+            "[bold magenta]The Scriptwriter is drafting the episode...[/bold magenta]",
+            spinner="bouncingBall",
+        ):
+            # Pass world to the generator
+            plot = await generate_plot(prompt, world)
             plot.id = name
         save_plot(plot, filename)
         history.append(("user", f"Create plot: {prompt}"))
@@ -224,9 +266,12 @@ async def plot_loop(name: str):
         if command.lower() in ["exit", "quit", "q"]:
             break
 
-        with console.status("[bold magenta]Refining script...[/bold magenta]", spinner="dots"):
+        with console.status(
+            "[bold magenta]Refining script...[/bold magenta]", spinner="dots"
+        ):
             try:
-                plot = await update_plot(plot, command)
+                # Pass world to the updater
+                plot = await update_plot(plot, command, world)
                 save_plot(plot, filename)
                 history.append(("user", command))
                 changes = f"Cast: {len(plot.available_characters)}"
@@ -237,6 +282,7 @@ async def plot_loop(name: str):
 
 
 # --- COMMANDS ---
+
 
 @app.command()
 def build():

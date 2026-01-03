@@ -60,33 +60,27 @@ Ensure the 'id' fields are snake_case and unique-ish.
 """
 
 
-async def generate_plot(prompt: str) -> Plot:
-    """
-    Creates a new Plot (Episode) based on a premise or genre idea.
-    """
+async def generate_plot(prompt: str, world: World) -> Plot:
+    """Creates a new Plot (Episode) based on a premise, grounded in the provided World."""
     llm = LLM()
-
     messages = [
         Message.system(SCRIPTWRITER_SYSTEM_PROMPT),
+        Message.user("Context: This plot takes place in the following world:"),
+        Message.user(world),
         Message.user(f"Write a plot/episode based on this idea: {prompt}"),
     ]
-
-    plot = await llm.create(Plot, messages)
-    return plot
+    return await llm.create(Plot, messages)
 
 
-async def update_plot(current_plot: Plot, command: str) -> Plot:
-    """
-    Refines or modifies an existing Plot (e.g., 'Change the genre to Horror', 'Add a Mercenary character').
-    """
+async def update_plot(current_plot: Plot, command: str, world: World) -> Plot:
+    """Refines or modifies an existing Plot with context of the world."""
     llm = LLM()
-
     messages = [
         Message.system(SCRIPTWRITER_SYSTEM_PROMPT),
+        Message.user("Context: This plot takes place in the following world:"),
+        Message.user(world),
         Message.user("Here is the current plot draft:"),
         Message.user(current_plot),
         Message.user(f"Apply this change/update to the plot: {command}"),
     ]
-
-    updated_plot = await llm.create(Plot, messages)
-    return updated_plot
+    return await llm.create(Plot, messages)
