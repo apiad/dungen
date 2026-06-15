@@ -1,6 +1,6 @@
 [project]
 name = "dungen"
-version = "0.2.0-dev"
+version = "1.0.0"
 description = "Thin simulation framework for building interactive worlds."
 readme = "README.md"
 authors = [
