@@ -23,6 +23,13 @@ class Ledger:
         self._events.append(event)
 
     def query(self, **filters) -> list[Event]:
+        # List fields (perceived_by) use `in`; scalar fields use `==`.
+        # Raises ValueError on unknown field names.
+        event_fields = Event.model_fields
+        for field in filters:
+            if field not in event_fields:
+                raise ValueError(f"Unknown Event field: {field!r}")
+
         results: list[Event] = []
         for event in self._events:
             match = True
