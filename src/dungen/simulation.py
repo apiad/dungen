@@ -134,7 +134,7 @@ class Simulation:
         try:
             result = action_def.fn(actor_id=actor_id, ctx=ctx, **args)
             if asyncio.iscoroutine(result):
-                asyncio.get_event_loop().run_until_complete(result)
+                asyncio.run(result)
         except ActionError as e:
             raise SeedError(str(e)) from e
 

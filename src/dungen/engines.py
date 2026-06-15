@@ -126,10 +126,13 @@ class _ActionTool:
             self._params[pname] = ann
 
     def bind(self, actor_id: str, ctx: Any) -> "_ActionTool":
-        """Return self with actor_id and ctx bound for run()."""
-        self._actor_id = actor_id
-        self._ctx = ctx
-        return self
+        """Return a copy with actor_id and ctx bound for this turn's run()."""
+        copy = _ActionTool.__new__(_ActionTool)
+        copy._def = self._def
+        copy._params = self._params
+        copy._actor_id = actor_id
+        copy._ctx = ctx
+        return copy
 
     @property
     def name(self) -> str:
