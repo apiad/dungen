@@ -61,7 +61,7 @@ async def test_deterministic_engine_returns_fn_result():
         return expected
 
     engine = DeterministicEngine(fn)
-    result = await engine.decide(_make_character(), {}, _make_snapshot())
+    result = await engine.decide(_make_character(), {}, _make_snapshot(), turn=1)
     assert result is expected
 
 
@@ -78,7 +78,7 @@ async def test_deterministic_engine_passes_character_and_perception():
     perception = {"enemies": ["goblin"], "hp": 10}
 
     engine = DeterministicEngine(fn)
-    await engine.decide(char, perception, _make_snapshot())
+    await engine.decide(char, perception, _make_snapshot(), turn=1)
 
     assert received["character"] is char
     assert received["perception"] == perception
@@ -95,7 +95,7 @@ async def test_deterministic_engine_world_not_passed_to_fn():
 
     engine = DeterministicEngine(fn)
     snap = _make_snapshot()
-    await engine.decide(_make_character(), {"x": 1}, snap)
+    await engine.decide(_make_character(), {"x": 1}, snap, turn=1)
 
     assert len(call_args) == 1
     char, perc = call_args[0]
@@ -116,7 +116,7 @@ async def test_human_engine_sync_input_fn():
         return expected
 
     engine = HumanEngine(input_fn=sync_input)
-    result = await engine.decide(_make_character(), {}, _make_snapshot())
+    result = await engine.decide(_make_character(), {}, _make_snapshot(), turn=1)
     assert result is expected
 
 
@@ -133,7 +133,7 @@ async def test_human_engine_sync_input_fn_receives_character_and_perception():
     perc = {"items": ["key"]}
 
     engine = HumanEngine(input_fn=sync_input)
-    await engine.decide(char, perc, _make_snapshot())
+    await engine.decide(char, perc, _make_snapshot(), turn=1)
 
     assert received["character"] is char
     assert received["perception"] == perc
@@ -152,7 +152,7 @@ async def test_human_engine_async_input_fn():
         return expected
 
     engine = HumanEngine(input_fn=async_input)
-    result = await engine.decide(_make_character(), {}, _make_snapshot())
+    result = await engine.decide(_make_character(), {}, _make_snapshot(), turn=1)
     assert result is expected
 
 
@@ -165,7 +165,7 @@ async def test_human_engine_async_input_fn_is_awaited():
         return ActionCall("pass")
 
     engine = HumanEngine(input_fn=async_input)
-    await engine.decide(_make_character(), {}, _make_snapshot())
+    await engine.decide(_make_character(), {}, _make_snapshot(), turn=1)
     assert awaited["done"] is True
 
 
@@ -187,9 +187,9 @@ def _make_minimal_agent_engine():
         "on_checkpoint": [],
     }
     engine._messages = []
-    engine._action_tools = []
     engine._read_tools = []
     engine._commit_tools = []
+    engine._world = None
     return engine
 
 
@@ -339,7 +339,7 @@ def test_agent_engine_bind_splits_into_read_and_commit():
     def move(actor_id: str, ctx, destination: str) -> None:
         """Move to destination."""
 
-    engine.bind(w._actions)
+    engine.bind(w._actions, w)
 
     assert len(engine._read_tools) == 1
     assert len(engine._commit_tools) == 1
@@ -356,7 +356,7 @@ def test_agent_engine_bind_tool_parameters_exclude_framework_params():
     def attack(actor_id: str, ctx, target: str, damage: int) -> None:
         """Attack a target."""
 
-    engine.bind(w._actions)
+    engine.bind(w._actions, w)
 
     tool = engine._commit_tools[0]
     params = tool.parameters()

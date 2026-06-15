@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
-    from dungen.world import ActionDef, WorldSnapshot
+    from dungen.world import ActionDef, World, WorldSnapshot
 
 
 # ---------------------------------------------------------------------------
@@ -20,8 +20,6 @@ if TYPE_CHECKING:
 
 @dataclass
 class ActionCall:
-    """A resolved action name and its keyword arguments."""
-
     action: str
     args: dict = field(default_factory=dict)
 
@@ -32,22 +30,14 @@ class ActionCall:
 
 
 class Engine(abc.ABC):
-    """Abstract base for all character decision-making backends."""
-
     @abc.abstractmethod
     async def decide(
         self,
         character: Any,
         perception: dict,
         world: "WorldSnapshot",
+        turn: int,
     ) -> ActionCall:
-        """Return the ActionCall this engine chooses for the given character.
-
-        Args:
-            character: The entity (or user subclass) making the decision.
-            perception: The dict produced by the perceive_fn for this character.
-            world: A read-only WorldSnapshot at this point in time.
-        """
         ...
 
 
@@ -57,14 +47,8 @@ class Engine(abc.ABC):
 
 
 class DeterministicEngine(Engine):
-    """Engine driven by a plain synchronous function.
-
-    The function receives ``(character, perception)`` and must return an
-    :class:`ActionCall`.  It is called directly (no thread pool needed —
-    deterministic functions are expected to be fast/pure).
-    """
-
     def __init__(self, fn: Callable) -> None:
+        # fn(character, perception) → ActionCall  (sync)
         self._fn = fn
 
     async def decide(
@@ -72,6 +56,7 @@ class DeterministicEngine(Engine):
         character: Any,
         perception: dict,
         world: "WorldSnapshot",
+        turn: int,
     ) -> ActionCall:
         return self._fn(character, perception)
 
@@ -82,7 +67,6 @@ class DeterministicEngine(Engine):
 
 
 def _default_cli_input(character: Any, perception: dict) -> ActionCall:
-    """Default blocking CLI prompt for HumanEngine."""
     print(f"\n[{character.id}] Perception:\n{json.dumps(perception, indent=2)}")
     action = input("Action name: ").strip()
     raw_args = input("Args (JSON, or blank for {}): ").strip()
@@ -91,19 +75,6 @@ def _default_cli_input(character: Any, perception: dict) -> ActionCall:
 
 
 class HumanEngine(Engine):
-    """Engine that delegates to a human (or test stub) via a callable.
-
-    If no ``input_fn`` is provided the engine blocks on a simple CLI prompt
-    running in a thread so it does not block the event loop.
-
-    ``input_fn`` may be synchronous or asynchronous:
-
-    - **sync** → wrapped in :func:`asyncio.to_thread` automatically.
-    - **async** → awaited directly.
-
-    Signature: ``input_fn(character, perception) → ActionCall``
-    """
-
     def __init__(self, input_fn: Callable | None = None) -> None:
         self._input_fn: Callable = input_fn or _default_cli_input
 
@@ -112,6 +83,7 @@ class HumanEngine(Engine):
         character: Any,
         perception: dict,
         world: "WorldSnapshot",
+        turn: int,
     ) -> ActionCall:
         fn = self._input_fn
         if inspect.iscoroutinefunction(fn):
@@ -120,33 +92,29 @@ class HumanEngine(Engine):
 
 
 # ---------------------------------------------------------------------------
-# AgentEngine — LLM-driven via lingo
+# AgentEngine — LLM-driven via Lingo native tool-calling
 # ---------------------------------------------------------------------------
 
 try:
     from lingo import LLM, Message
-    from lingo.tools import DelegateTool, Tool
-
     _LINGO_AVAILABLE = True
 except ImportError:  # pragma: no cover
     _LINGO_AVAILABLE = False
 
 
 class _ActionTool:
-    """Minimal lingo-compatible Tool built from an ActionDef.
+    """Lingo-compatible Tool built from an ActionDef.
 
-    Rather than using DelegateTool (which wraps an actual callable), this class
-    exposes the ActionDef's parameter schema for structured-output prompting
-    while keeping the tool name and description.  The ``run`` method is never
-    called inside the engine loop — commit tools return their ActionCall to the
-    Simulation; read tools are executed via their stored ActionDef.fn.
+    Exposes name, description, and parameters() for schema serialization.
+    run() is only used for read tools (calls the action fn with actor_id + ctx).
+    Commit tools: Simulation executes them — run() is never called.
     """
 
     def __init__(self, action_def: "ActionDef") -> None:
         self._def = action_def
-        self._name = action_def.name
-        self._description = action_def.description
-        # Build parameter map from fn signature, skipping framework params.
+        self._actor_id: str | None = None
+        self._ctx: Any = None
+
         sig = inspect.signature(action_def.fn)
         self._params: dict[str, type] = {}
         for pname, param in sig.parameters.items():
@@ -157,67 +125,50 @@ class _ActionTool:
                 ann = Any
             self._params[pname] = ann
 
+    def bind(self, actor_id: str, ctx: Any) -> "_ActionTool":
+        """Return self with actor_id and ctx bound for run()."""
+        self._actor_id = actor_id
+        self._ctx = ctx
+        return self
+
     @property
     def name(self) -> str:
-        return self._name
+        return self._def.name
 
     @property
     def description(self) -> str:
-        return self._description
+        return self._def.description
 
     def parameters(self) -> dict[str, type]:
         return dict(self._params)
 
-    def schema_description(self) -> str:
-        """Human-readable parameter description for prompt injection."""
-        if not self._params:
-            return "(no parameters)"
-        parts = [f"{k}: {v.__name__ if hasattr(v, '__name__') else str(v)}"
-                 for k, v in self._params.items()]
-        return ", ".join(parts)
-
     async def run(self, **kwargs: Any) -> Any:
-        """Placeholder — never called inside AgentEngine."""
-        raise NotImplementedError("_ActionTool.run should not be called directly")
-
-
-def _build_action_menu(tools: list["_ActionTool"]) -> str:
-    """Return a readable list of available actions for prompt injection."""
-    lines = []
-    for t in tools:
-        lines.append(f"  - {t.name}({t.schema_description()}): {t.description}")
-    return "\n".join(lines)
+        return await self._def.fn(
+            actor_id=self._actor_id,
+            ctx=self._ctx,
+            **kwargs,
+        )
 
 
 class AgentEngine(Engine):
-    """LLM-driven engine using lingo for structured decision-making.
+    """LLM-driven engine using Lingo's native tool-calling loop.
 
-    Uses ``LLM.create`` (structured output) to select an action each turn,
-    looping on read-only actions and returning the first commit action.
+    Read tools (commits=False) are executed inline inside the loop; the LLM
+    sees their results and continues deciding.  Commit tools (commits=True) are
+    NOT executed here — their name+args are returned as an ActionCall and the
+    Simulation resolves them via Context.
 
     Hook system
     -----------
-    Register hooks with ``@engine.on(event_name)``.
+    Register hooks with @engine.on(event_name).
 
     Supported events:
+    - before_turn: async fn(character, messages, world) → list[Message] | None
+    - after_read_action: async fn(character, messages, world, tool_result=...) → list[Message] | None
+    - after_turn: async fn(character, messages, world) → list[Message] | None
+    - on_checkpoint: async fn(character, messages, world, name=...) → list[Message] | None
 
-    ``before_turn``
-        Fired before the LLM is consulted.
-        Signature: ``async fn(character, messages, world) → list[Message] | None``
-
-    ``after_read_action``
-        Fired after each read-only action is executed inside the loop.
-        Signature: ``async fn(character, messages, world, tool_result=...) → list[Message] | None``
-
-    ``after_turn``
-        Fired after the engine commits an action (or passes).
-        Signature: ``async fn(character, messages, world) → list[Message] | None``
-
-    ``on_checkpoint``
-        For user-defined checkpointing.  Receives an extra ``name`` kwarg.
-        Signature: ``async fn(character, messages, world, name=...) → list[Message] | None``
-
-    If a hook returns a list, ``self._messages`` is replaced with that list.
+    If a hook returns a list it replaces the engine's working memory.
     """
 
     def __init__(self, llm: "LLM", system_prompt: str) -> None:
@@ -232,27 +183,19 @@ class AgentEngine(Engine):
             "on_checkpoint": [],
         }
         self._messages: list["Message"] = []
-        self._action_tools: list[_ActionTool] = []
         self._read_tools: list[_ActionTool] = []
         self._commit_tools: list[_ActionTool] = []
+        self._world: "World | None" = None
 
     # ------------------------------------------------------------------
     # Hook API
     # ------------------------------------------------------------------
 
     def on(self, event: str) -> Callable:
-        """Decorator to register a hook for *event*.
-
-        Example::
-
-            @engine.on("after_turn")
-            async def summarise(character, messages, world):
-                ...  # optionally return a new list[Message]
-        """
+        """Decorator to register a hook for *event*."""
         if event not in self._hooks:
             raise ValueError(
-                f"Unknown hook event {event!r}. "
-                f"Valid events: {list(self._hooks)}"
+                f"Unknown hook event {event!r}. Valid: {list(self._hooks)}"
             )
 
         def decorator(fn: Callable) -> Callable:
@@ -268,7 +211,6 @@ class AgentEngine(Engine):
         world: "WorldSnapshot",
         **kwargs: Any,
     ) -> None:
-        """Run all hooks for *event*.  If a hook returns a list, replace messages."""
         for hook in self._hooks.get(event, []):
             result = await hook(character, self._messages, world, **kwargs)
             if result is not None:
@@ -278,18 +220,17 @@ class AgentEngine(Engine):
     # Bind — called by Simulation before first turn
     # ------------------------------------------------------------------
 
-    def bind(self, actions: dict[str, "ActionDef"]) -> None:
-        """Attach action definitions to this engine.
+    def bind(self, actions: dict[str, "ActionDef"], world: "World") -> None:
+        """Attach action definitions and live World reference.
 
-        Builds ``_ActionTool`` wrappers and splits them into read vs commit
-        lists.  Called by the Simulation before the first turn.
+        Called by Simulation before the first turn. The World reference is
+        used to construct a Context for read-tool execution.
         """
-        self._action_tools = []
+        self._world = world
         self._read_tools = []
         self._commit_tools = []
         for action_def in actions.values():
             t = _ActionTool(action_def)
-            self._action_tools.append(t)
             if action_def.commits:
                 self._commit_tools.append(t)
             else:
@@ -304,102 +245,60 @@ class AgentEngine(Engine):
         character: Any,
         perception: dict,
         world: "WorldSnapshot",
+        turn: int,
     ) -> ActionCall:
-        """Run the agentic loop and return the chosen commit ActionCall.
+        from dungen.context import Context
 
-        Strategy
-        --------
-        1. On the first call, initialise working memory with the system prompt.
-        2. Fire ``before_turn`` hooks.
-        3. Add perception as a user message.
-        4. Enter the loop (capped at 20 iterations):
-           a. Ask the LLM to pick an action via ``LLM.create`` (structured output).
-           b. If the chosen action is a commit action, flush messages and return.
-           c. If it is a read action, execute it, add the result, fire
-              ``after_read_action`` hooks, and continue.
-           d. If the LLM returns "pass" (or no valid action), return
-              ``ActionCall("pass", {})``.
-        5. Fire ``after_turn`` hooks before returning.
-        """
-        from pydantic import BaseModel, create_model
-        from typing import Literal
-
-        # Lazy initialise working memory.
+        # Lazy-init working memory.
         if not self._messages:
             self._messages = [Message.system(self._system_prompt)]
 
         await self._run_hooks("before_turn", character, world)
 
-        # Build the turn message list (working memory + current perception).
         perception_text = json.dumps(perception, indent=2)
         turn_messages = list(self._messages) + [Message.user(perception_text)]
 
-        all_tools = self._action_tools
+        # Build a Context for read-tool execution this turn.
+        ctx = Context(self._world, turn) if self._world else None
+
+        # Bind actor + ctx into read tools (commit tools are never run() here).
+        read_tools = [t.bind(character.id, ctx) for t in self._read_tools]
         commit_names = {t.name for t in self._commit_tools}
-        tool_map = {t.name: t for t in all_tools}
-
-        # Build action-choice schema dynamically.
-        # action_names includes "pass" as an escape hatch.
-        action_names_list = [t.name for t in all_tools] + ["pass"]
-        ActionName = Literal[tuple(action_names_list)]  # type: ignore[valid-type]
-
-        class ActionChoice(BaseModel):
-            """Choose an action and supply its arguments as a JSON object."""
-
-            action: ActionName  # type: ignore[valid-type]
-            args: dict = {}
-            reasoning: str = ""
-
-        # Build an actions menu to inject into the selection prompt.
-        menu = _build_action_menu(all_tools)
-        selection_prompt = (
-            f"Available actions:\n{menu}\n\n"
-            "Choose one action and supply its arguments. "
-            "Use 'pass' to skip your turn with empty args."
-        )
+        all_tools = read_tools + self._commit_tools
 
         for _ in range(20):  # safety cap
-            # Ask the LLM to choose an action.
-            prompt_messages = turn_messages + [Message.system(selection_prompt)]
-            choice: ActionChoice = await self._llm.create(
-                ActionChoice, prompt_messages
-            )
+            msg = await self._llm.chat(turn_messages, tools=all_tools)
+            turn_messages.append(msg)
 
-            chosen = choice.action
-            args = choice.args or {}
-
-            if chosen == "pass" or chosen not in tool_map:
-                # Agent chose to pass or returned an invalid action.
+            if not msg.tool_calls:
+                # LLM chose not to call a tool — pass this turn.
                 self._messages = turn_messages
                 await self._run_hooks("after_turn", character, world)
                 return ActionCall("pass", {})
 
-            if chosen in commit_names:
-                # Commit action — return to Simulation for execution.
-                self._messages = turn_messages
-                await self._run_hooks("after_turn", character, world)
-                return ActionCall(chosen, args)
+            # Check for a commit tool call — return immediately.
+            for call in msg.tool_calls:
+                if call.name in commit_names:
+                    self._messages = turn_messages
+                    await self._run_hooks("after_turn", character, world)
+                    return ActionCall(call.name, call.arguments)
 
-            # Read action — execute inline and continue the loop.
-            tool = tool_map[chosen]
-            try:
-                result = await tool._def.fn(
-                    actor_id=character.id,
-                    ctx=None,  # read actions should not need Context
-                    **args,
-                )
-            except Exception as exc:
-                result = f"Error: {exc}"
+            # Only read tool calls this round — execute and feed results back.
+            tool_by_name = {t.name: t for t in read_tools}
+            for call in msg.tool_calls:
+                tool = tool_by_name.get(call.name)
+                if tool is None:
+                    result = f"Unknown action: {call.name}"
+                else:
+                    try:
+                        result = await tool.run(**call.arguments)
+                    except Exception as exc:
+                        result = f"Error: {exc}"
+                result_str = json.dumps(result) if not isinstance(result, str) else result
+                turn_messages.append(Message.tool(result_str, tool_call_id=call.id))
+                await self._run_hooks("after_read_action", character, world, tool_result=result)
 
-            result_text = json.dumps(result) if not isinstance(result, str) else result
-            turn_messages.append(
-                Message.assistant(f"Called {chosen}({args}) → {result_text}")
-            )
-            await self._run_hooks(
-                "after_read_action", character, world, tool_result=result
-            )
-
-        # Safety cap reached — pass.
+        # Safety cap — pass.
         self._messages = turn_messages
         await self._run_hooks("after_turn", character, world)
         return ActionCall("pass", {})
